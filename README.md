@@ -1,6 +1,6 @@
 # Aura
 
-Aura is a React + Vite streaming discovery app for finding movies and TV shows, browsing a local catalog, and checking where titles are available to stream.
+Aura is a React + Vite streaming discovery app for finding movies and TV shows from online APIs and checking where titles are available to stream.
 
 ## Local Development
 
@@ -30,13 +30,12 @@ Use these settings when importing the GitHub repository into Vercel:
 
 ## Environment Variables
 
-The app can run without API keys by using bundled fallback data. For live API calls, add these variables in Vercel Project Settings:
+Add these variables in Vercel Project Settings. `VITE_TMDB_API_KEY` is required for movie feeds, browse, and search:
 
 ```bash
 VITE_OMDB_API_KEY=
 VITE_STREAMING_API_KEY=
 VITE_TMDB_API_KEY=
-VITE_USE_LOCAL_CATALOG=false
 ```
 
-Home, browse, and carousel movie feeds use TMDb when `VITE_TMDB_API_KEY` is available. Set `VITE_USE_LOCAL_CATALOG=true` only when you want to force the bundled `movie.json` fallback.
+Home, browse, search, and carousel movie feeds use TMDb through `VITE_TMDB_API_KEY`. No local movie catalog is bundled.
