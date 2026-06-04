@@ -4,24 +4,25 @@ import { ChevronRight, Home, Film, Bell, User } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getImageUrl, getPosterGradient, GENRES } from '../api/tmdb';
 
-const CATEGORIES = ['Coming Soon', 'Now Playing', 'Tomorrow'];
+const CATEGORIES = ['New Releases', 'Now Playing', 'Top Rated'];
 
 export default function MovieScrollView({
   trending = [],
   popular = [],
   topRated = [],
   nowPlaying = [],
+  latestReleases = [],
 }) {
-  const [activeCategory, setActiveCategory] = useState(1);
+  const [activeCategory, setActiveCategory] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const trackRef = useRef(null);
   const navigate = useNavigate();
 
   const movies = activeCategory === 0
-    ? popular
+    ? (latestReleases.length > 0 ? latestReleases : nowPlaying.length > 0 ? nowPlaying : trending)
     : activeCategory === 1
-      ? (nowPlaying.length > 0 ? nowPlaying : trending)
-      : topRated;
+      ? (nowPlaying.length > 0 ? nowPlaying : popular.length > 0 ? popular : trending)
+      : (topRated.length > 0 ? topRated : trending);
 
   const activeMovie = movies[currentIndex] || movies[0];
   const activePosterUrl = activeMovie?.poster_path

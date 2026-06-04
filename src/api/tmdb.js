@@ -171,7 +171,27 @@ export const getPopular = (mediaType = 'movie', page = 1) =>
 export const getTopRated = (mediaType = 'movie', page = 1) =>
   fetchWithCache(`${BASE_URL}/${mediaType}/top_rated?page=${page}`);
 
+export const getLatestReleases = (page = 1) => {
+  const today = new Date().toISOString().slice(0, 10);
+  const params = new URLSearchParams({
+    sort_by: 'primary_release_date.desc',
+    'primary_release_date.lte': today,
+    'vote_count.gte': '20',
+    include_adult: 'false',
+    include_video: 'false',
+    page: String(page),
+  });
+
+  return fetchWithCache(`${BASE_URL}/discover/movie?${params.toString()}`);
+};
+
 export const getDetails = async (mediaType, id) => {
+  const isTmdbId = /^\d+$/.test(String(id));
+
+  if (isTmdbId) {
+    return fetchWithCache(`${BASE_URL}/${mediaType}/${id}?append_to_response=credits,similar,watch/providers`);
+  }
+
   if (!OMDB_API_URL) {
     return getLocalDetails(id);
   }
@@ -359,13 +379,19 @@ function getMockData(url) {
     return { results: sorted };
   }
 
-  if (url.includes('/upcoming') || url.includes('/now_playing')) {
+  if (url.includes('/upcoming') || url.includes('/now_playing') || url.includes('sort_by=primary_release_date.desc')) {
+    const today = new Date().toISOString().slice(0, 10);
     const sorted = [...MOCK_MOVIES].sort((a, b) => {
-      const yearA = parseInt(a.release_date?.slice(0, 4) || '0');
-      const yearB = parseInt(b.release_date?.slice(0, 4) || '0');
-      return yearB - yearA;
+      const dateA = a.release_date || a.first_air_date || '0000-00-00';
+      const dateB = b.release_date || b.first_air_date || '0000-00-00';
+      return dateB.localeCompare(dateA);
     });
-    return { results: sorted.slice(0, 20) };
+    const released = sorted.filter(movie => {
+      const date = movie.release_date || movie.first_air_date;
+      return !date || date <= today;
+    });
+
+    return { results: released.slice(0, 20) };
   }
 
   if (url.includes('/genre/')) {
@@ -375,7 +401,9 @@ function getMockData(url) {
   if (url.includes('/discover/')) {
     const params = new URLSearchParams(url.split('?')[1]);
     const genreId = parseInt(params.get('with_genres'));
-    const filtered = MOCK_MOVIES.filter(m => m.genre_ids.includes(genreId));
+    const filtered = Number.isNaN(genreId)
+      ? MOCK_MOVIES
+      : MOCK_MOVIES.filter(m => m.genre_ids.includes(genreId));
     return { results: filtered, total_results: filtered.length };
   }
 

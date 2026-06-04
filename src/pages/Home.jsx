@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Play, Plus, Star, TrendingUp, Sparkles, Film } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getTrending, getPopular, getTopRated, getNowPlaying, getPosterGradient, GENRES } from '../api/tmdb';
+import { getTrending, getPopular, getTopRated, getNowPlaying, getLatestReleases, getPosterGradient, GENRES } from '../api/tmdb';
 import { useApp } from '../context/AppContext';
 import Carousel from '../components/Carousel';
 import GenreChips from '../components/GenreChips';
@@ -14,6 +14,7 @@ export default function Home() {
   const [popular, setPopular] = useState([]);
   const [topRated, setTopRated] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
+  const [latestReleases, setLatestReleases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [heroMovie, setHeroMovie] = useState(null);
   const navigate = useNavigate();
@@ -22,19 +23,20 @@ export default function Home() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [trendData, popData, topData, nowData] = await Promise.all([
+        const [latestData, trendData, popData, topData, nowData] = await Promise.all([
+          getLatestReleases(),
           getTrending(),
           getPopular(),
           getTopRated(),
           getNowPlaying(),
         ]);
+        setLatestReleases((latestData.results || []).slice(0, 15));
         setTrending((trendData.results || []).slice(0, 15));
         setPopular((popData.results || []).slice(0, 15));
         setTopRated((topData.results || []).slice(0, 15));
         setNowPlaying((nowData.results || []).slice(0, 15));
 
-        // Pick hero from trending
-        const hero = (trendData.results || [])[0];
+        const hero = (latestData.results || trendData.results || [])[0];
         if (hero) setHeroMovie(hero);
       } catch (err) {
         console.error('Failed to fetch home data:', err);
@@ -58,6 +60,7 @@ export default function Home() {
           popular={popular}
           topRated={topRated}
           nowPlaying={nowPlaying}
+          latestReleases={latestReleases}
         />
       )}
 
@@ -86,7 +89,7 @@ export default function Home() {
                 <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
                     <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.2)', color: 'var(--aurora-purple)' }}>
-                      <TrendingUp size={12} /> Trending Now
+                      <TrendingUp size={12} /> Latest Release
                     </span>
                     <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--rating-high)' }}>
                       <Star size={12} fill="currentColor" /> {heroMovie.vote_average?.toFixed(1)}
@@ -167,6 +170,18 @@ export default function Home() {
                 transition={{ delay: 0.3, duration: 0.5 }}
               >
                 <Carousel
+                  title="Latest Releases"
+                  items={latestReleases}
+                  seeAllLink="/browse"
+                />
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+              >
+                <Carousel
                   title={`🔥 Trending This Week`}
                   items={trending}
                   seeAllLink="/browse"
@@ -176,7 +191,7 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.5 }}
+                transition={{ delay: 0.5, duration: 0.5 }}
               >
                 <Carousel
                   title="⭐ Top Rated"
@@ -188,7 +203,7 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
+                transition={{ delay: 0.6, duration: 0.5 }}
               >
                 <Carousel
                   title="🎬 Popular Movies"
@@ -200,7 +215,7 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.5 }}
+                transition={{ delay: 0.7, duration: 0.5 }}
               >
                 <Carousel
                   title="🍿 Now Playing"
@@ -213,7 +228,7 @@ export default function Home() {
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ delay: 0.7 }}
+                transition={{ delay: 0.8 }}
                 style={{
                   padding: 'var(--space-xl)',
                   borderRadius: 'var(--radius-lg)',
