@@ -51,7 +51,7 @@ export const getBackdropUrl = (path, size = 'original') => {
 const cache = new Map();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-const USE_LOCAL_CATALOG = true;
+const USE_LOCAL_CATALOG = import.meta.env.VITE_USE_LOCAL_CATALOG === 'true';
 
 const fetchWithCache = async (urlWithoutKey) => {
   if (USE_LOCAL_CATALOG) {

@@ -36,4 +36,7 @@ The app can run without API keys by using bundled fallback data. For live API ca
 VITE_OMDB_API_KEY=
 VITE_STREAMING_API_KEY=
 VITE_TMDB_API_KEY=
+VITE_USE_LOCAL_CATALOG=false
 ```
+
+Home, browse, and carousel movie feeds use TMDb when `VITE_TMDB_API_KEY` is available. Set `VITE_USE_LOCAL_CATALOG=true` only when you want to force the bundled `movie.json` fallback.
