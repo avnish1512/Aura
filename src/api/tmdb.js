@@ -30,7 +30,7 @@ export const getBackdropUrl = (path, size = 'original') => {
 const fetchWithCache = async (urlWithoutKey, fallback = EMPTY_RESULTS) => {
   if (!TMDB_API_KEY) {
     if (!warnedMissingTmdbKey) {
-      console.warn('Missing VITE_TMDB_API_KEY. Online movie feeds will be empty.');
+      console.warn('Missing VITE_TMDB_API_KEY. TMDb-only feeds will be empty; OMDb fallback is used where available.');
       warnedMissingTmdbKey = true;
     }
     return fallback;
@@ -62,6 +62,73 @@ const fetchWithCache = async (urlWithoutKey, fallback = EMPTY_RESULTS) => {
 const getOmdbPosterUrl = (imdbId) =>
   OMDB_API_KEY ? `https://img.omdbapi.com/?apikey=${OMDB_API_KEY}&i=${imdbId}` : null;
 
+const mapOmdbSearchItem = (item) => ({
+  id: item.imdbID,
+  imdb_id: item.imdbID,
+  title: item.Title,
+  name: item.Title,
+  media_type: item.Type === 'series' ? 'tv' : 'movie',
+  poster_path: item.Poster !== 'N/A' ? item.Poster : getOmdbPosterUrl(item.imdbID),
+  backdrop_path: item.Poster !== 'N/A' ? item.Poster : getOmdbPosterUrl(item.imdbID),
+  release_date: item.Year,
+  first_air_date: item.Year,
+  vote_average: 6.0,
+  genre_ids: [],
+});
+
+const fetchOmdbSearch = async ({ query, page = 1, type = 'movie', year }) => {
+  if (!OMDB_API_URL) {
+    return EMPTY_RESULTS;
+  }
+
+  const params = new URLSearchParams({
+    s: query,
+    page: String(page),
+  });
+
+  if (type) params.set('type', type);
+  if (year) params.set('y', String(year));
+
+  try {
+    const response = await fetch(`${OMDB_API_URL}${params.toString()}`);
+    if (!response.ok) {
+      throw new Error(`OMDb Search Error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (data.Response === 'False') {
+      return EMPTY_RESULTS;
+    }
+
+    const results = data.Search.map(mapOmdbSearchItem);
+    return { results, total_results: parseInt(data.totalResults) || results.length, page };
+  } catch (error) {
+    console.error('OMDb search failed:', error);
+    return EMPTY_RESULTS;
+  }
+};
+
+const getOmdbLatestReleases = async (page = 1) => {
+  const currentYear = new Date().getFullYear();
+  const feeds = await Promise.all([
+    fetchOmdbSearch({ query: 'movie', year: currentYear, page }),
+    fetchOmdbSearch({ query: 'movie', year: currentYear - 1, page: 1 }),
+  ]);
+
+  const seen = new Set();
+  const results = feeds
+    .flatMap(feed => feed.results || [])
+    .filter(movie => {
+      if (seen.has(movie.id)) return false;
+      seen.add(movie.id);
+      return movie.media_type === 'movie';
+    })
+    .sort((a, b) => String(b.release_date || '').localeCompare(String(a.release_date || '')))
+    .slice(0, 20);
+
+  return { results, total_results: results.length, page };
+};
+
 export const searchMulti = async (query, page = 1) => {
   const trimmedQuery = query.trim();
   if (!trimmedQuery) {
@@ -82,35 +149,7 @@ export const searchMulti = async (query, page = 1) => {
     return EMPTY_RESULTS;
   }
 
-  try {
-    const response = await fetch(`${OMDB_API_URL}s=${encodeURIComponent(trimmedQuery)}&page=${page}`);
-    if (!response.ok) {
-      throw new Error(`OMDb Search Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    if (data.Response === 'False') {
-      return EMPTY_RESULTS;
-    }
-
-    const results = data.Search.map(item => ({
-      id: item.imdbID,
-      title: item.Title,
-      name: item.Title,
-      media_type: item.Type === 'series' ? 'tv' : 'movie',
-      poster_path: item.Poster !== 'N/A' ? item.Poster : getOmdbPosterUrl(item.imdbID),
-      backdrop_path: item.Poster !== 'N/A' ? item.Poster : getOmdbPosterUrl(item.imdbID),
-      release_date: item.Year,
-      first_air_date: item.Year,
-      vote_average: 6.0,
-      genre_ids: [],
-    }));
-
-    return { results, total_results: parseInt(data.totalResults) || results.length, page };
-  } catch (error) {
-    console.error('OMDb search failed:', error);
-    return EMPTY_RESULTS;
-  }
+  return fetchOmdbSearch({ query: trimmedQuery, page, type: null });
 };
 
 export const getTrending = (mediaType = 'all', timeWindow = 'week') =>
@@ -123,6 +162,10 @@ export const getTopRated = (mediaType = 'movie', page = 1) =>
   fetchWithCache(`${BASE_URL}/${mediaType}/top_rated?page=${page}`);
 
 export const getLatestReleases = (page = 1) => {
+  if (!TMDB_API_KEY && OMDB_API_URL) {
+    return getOmdbLatestReleases(page);
+  }
+
   const today = new Date().toISOString().slice(0, 10);
   const params = new URLSearchParams({
     sort_by: 'primary_release_date.desc',

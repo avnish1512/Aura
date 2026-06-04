@@ -30,7 +30,7 @@ Use these settings when importing the GitHub repository into Vercel:
 
 ## Environment Variables
 
-Add these variables in Vercel Project Settings. `VITE_TMDB_API_KEY` is required for movie feeds, browse, and search:
+Add these variables in Vercel Project Settings. `VITE_OMDB_API_KEY` can power search and the Home latest-release fallback. `VITE_TMDB_API_KEY` is recommended for full Home, Browse, trending, top-rated, and now-playing feeds:
 
 ```bash
 VITE_OMDB_API_KEY=
@@ -38,4 +38,4 @@ VITE_STREAMING_API_KEY=
 VITE_TMDB_API_KEY=
 ```
 
-Home, browse, search, and carousel movie feeds use TMDb through `VITE_TMDB_API_KEY`. No local movie catalog is bundled.
+No local movie catalog is bundled. Home latest releases can use OMDb when TMDb is missing; full discovery feeds use TMDb through `VITE_TMDB_API_KEY`.
