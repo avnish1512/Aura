@@ -128,18 +128,29 @@ const getLocalDetails = (id) => {
 };
 
 export const searchMulti = async (query, page = 1) => {
-  if (!OMDB_API_URL) {
-    return searchLocalCatalog(query);
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) {
+    return { results: [], total_results: 0, page: 1 };
+  }
+
+  if (ENV_TMDB_API_KEY || !OMDB_API_URL) {
+    const params = new URLSearchParams({
+      query: trimmedQuery,
+      page: String(page),
+      include_adult: 'false',
+    });
+
+    return fetchWithCache(`${BASE_URL}/search/multi?${params.toString()}`);
   }
 
   try {
-    const response = await fetch(`${OMDB_API_URL}s=${encodeURIComponent(query)}&page=${page}`);
+    const response = await fetch(`${OMDB_API_URL}s=${encodeURIComponent(trimmedQuery)}&page=${page}`);
     if (!response.ok) {
       throw new Error(`OMDb Search Error: ${response.status}`);
     }
     const data = await response.json();
     if (data.Response === 'False') {
-      return searchLocalCatalog(query);
+      return searchLocalCatalog(trimmedQuery);
     }
 
     const results = data.Search.map(item => ({
@@ -158,7 +169,7 @@ export const searchMulti = async (query, page = 1) => {
     return { results, total_results: parseInt(data.totalResults) || results.length, page: 1 };
   } catch (error) {
     console.error('OMDb search failed, falling back to local database search:', error);
-    return searchLocalCatalog(query);
+    return searchLocalCatalog(trimmedQuery);
   }
 };
 
