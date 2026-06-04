@@ -1,38 +1,27 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, Home, Film, Bell, User } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { Home, Film, Bell, User } from 'lucide-react';
 import { getImageUrl, getPosterGradient, GENRES } from '../api/tmdb';
-
-const CATEGORIES = ['New Releases', 'Now Playing', 'Top Rated'];
 
 export default function MovieScrollView({
   trending = [],
-  popular = [],
-  topRated = [],
   nowPlaying = [],
   latestReleases = [],
 }) {
-  const [activeCategory, setActiveCategory] = useState(0);
   const [currentIndex, setCurrentIndex] = useState(0);
   const trackRef = useRef(null);
   const navigate = useNavigate();
 
-  const movies = activeCategory === 0
-    ? (latestReleases.length > 0 ? latestReleases : nowPlaying.length > 0 ? nowPlaying : trending)
-    : activeCategory === 1
-      ? (nowPlaying.length > 0 ? nowPlaying : popular.length > 0 ? popular : trending)
-      : (topRated.length > 0 ? topRated : trending);
+  const movies = latestReleases.length > 0
+    ? latestReleases
+    : nowPlaying.length > 0
+      ? nowPlaying
+      : trending;
 
   const activeMovie = movies[currentIndex] || movies[0];
   const activePosterUrl = activeMovie?.poster_path
     ? getImageUrl(activeMovie.poster_path, 'w780')
     : null;
-
-  const now = new Date();
-  const day = now.getDate();
-  const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
-  const month = months[now.getMonth()];
 
   const openMovie = useCallback((movie) => {
     navigate(`/details/${movie.media_type || 'movie'}/${movie.id}`);
@@ -49,12 +38,6 @@ export default function MovieScrollView({
       setCurrentIndex(idx);
     }
   }, [currentIndex, movies.length]);
-
-  const handleCategorySelect = (index) => {
-    setCurrentIndex(0);
-    setActiveCategory(index);
-    if (trackRef.current) trackRef.current.scrollTo({ top: 0, behavior: 'auto' });
-  };
 
   useEffect(() => {
     const el = trackRef.current;
@@ -86,47 +69,6 @@ export default function MovieScrollView({
         style={activePosterUrl ? { backgroundImage: `url("${activePosterUrl}")` } : undefined}
         aria-hidden="true"
       />
-
-      <div className="msv-top">
-        <div className="msv-status" aria-hidden="true">
-          <span className="msv-time">9:41</span>
-          <span className="msv-island" />
-          <span className="msv-system-icons">
-            <span className="msv-signal">
-              <span />
-              <span />
-              <span />
-              <span />
-            </span>
-            <span className="msv-wifi" />
-            <span className="msv-battery" />
-          </span>
-        </div>
-
-        <div className="msv-cats">
-          {CATEGORIES.map((cat, index) => (
-            <button
-              key={cat}
-              className={`msv-cat ${activeCategory === index ? 'active' : ''}`}
-              onClick={() => handleCategorySelect(index)}
-              aria-pressed={activeCategory === index}
-            >
-              {cat}
-              {index === 2 && <ChevronRight size={13} strokeWidth={2.5} />}
-            </button>
-          ))}
-        </div>
-
-        <motion.div
-          className="msv-date"
-          key={activeCategory}
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.25 }}
-        >
-          {day} {month}
-        </motion.div>
-      </div>
 
       <div className="msv-scroll" ref={trackRef}>
         {movies.map((movie, index) => {
