@@ -1,9 +1,9 @@
-import { ExternalLink, Play, ShoppingCart } from 'lucide-react';
+import { ExternalLink, Gift, Play, ShoppingCart } from 'lucide-react';
 
 export default function StreamingPlatforms({ availability }) {
   if (!availability) return null;
 
-  const { subscription = [], rent = [], buy = [] } = availability;
+  const { subscription = [], free = [], rent = [], buy = [] } = availability;
 
   const renderSection = (title, icon, items, type) => {
     if (items.length === 0) return null;
@@ -56,7 +56,7 @@ export default function StreamingPlatforms({ availability }) {
     );
   };
 
-  const hasAny = subscription.length > 0 || rent.length > 0 || buy.length > 0;
+  const hasAny = subscription.length > 0 || free.length > 0 || rent.length > 0 || buy.length > 0;
 
   if (!hasAny) {
     return (
@@ -73,6 +73,7 @@ export default function StreamingPlatforms({ availability }) {
     <div className="streaming-section">
       <h3>📺 Where to Watch</h3>
       {renderSection('Stream', <Play size={14} />, subscription, 'Subscription')}
+      {renderSection('Free', <Gift size={14} />, free, 'Free')}
       {renderSection('Rent', <ShoppingCart size={14} />, rent, 'Rent')}
       {renderSection('Buy', <ShoppingCart size={14} />, buy, 'Purchase')}
     </div>

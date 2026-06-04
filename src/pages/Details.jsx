@@ -23,6 +23,11 @@ export default function Details() {
       try {
         const detailsData = await getDetails(type, id);
         setDetails(detailsData);
+
+        if (!detailsData) {
+          setStreaming(null);
+          return;
+        }
         
         // Fetch streaming availability using the actual TMDb ID and country code
         const streamingData = await getStreamingAvailability(type, detailsData.id, country);
