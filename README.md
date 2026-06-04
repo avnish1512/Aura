@@ -38,4 +38,4 @@ VITE_STREAMING_API_KEY=
 VITE_TMDB_API_KEY=
 ```
 
-No local movie catalog is bundled. Home latest releases can use OMDb when TMDb is missing; full discovery feeds use TMDb through `VITE_TMDB_API_KEY`. Streaming availability uses Watchmode through `VITE_STREAMING_API_KEY`.
+No local movie catalog is bundled. Home latest releases can use OMDb when TMDb is missing; full discovery feeds use TMDb through `VITE_TMDB_API_KEY`. Streaming availability and provider logos use Watchmode through `VITE_STREAMING_API_KEY`.

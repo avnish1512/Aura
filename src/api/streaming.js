@@ -146,6 +146,7 @@ export const PLATFORMS = {
 const API_KEY = import.meta.env.VITE_STREAMING_API_KEY || '';
 const WATCHMODE_BASE_URL = 'https://api.watchmode.com/v1';
 const streamingCache = new Map();
+const sourceMetadataCache = new Map();
 
 const emptyAvailability = Object.freeze({
   subscription: [],
@@ -174,21 +175,58 @@ const getWatchmodeTitleId = (mediaType, id) => {
   return `${type}-${stringId}`;
 };
 
-const getPlatformObject = (source) => {
-  const platformKey = normalizePlatformKey(source.name);
+const fetchSourceMetadata = async (region) => {
+  if (sourceMetadataCache.has(region)) {
+    return sourceMetadataCache.get(region);
+  }
+
+  const emptyMap = new Map();
+  if (!API_KEY) {
+    return emptyMap;
+  }
+
+  try {
+    const response = await fetch(`${WATCHMODE_BASE_URL}/sources/?apiKey=${API_KEY}&regions=${region}`);
+    if (!response.ok) {
+      throw new Error(`Watchmode sources API error: ${response.status}`);
+    }
+
+    const sources = await response.json();
+    const metadata = new Map();
+
+    if (Array.isArray(sources)) {
+      sources.forEach(source => {
+        metadata.set(source.id, source);
+      });
+    }
+
+    sourceMetadataCache.set(region, metadata);
+    return metadata;
+  } catch (error) {
+    console.error('Failed to fetch Watchmode source logos:', error);
+    sourceMetadataCache.set(region, emptyMap);
+    return emptyMap;
+  }
+};
+
+const getPlatformObject = (source, sourceMetadata) => {
+  const metadata = sourceMetadata.get(source.source_id) || {};
+  const platformName = source.name || metadata.name || 'Streaming Service';
+  const platformKey = normalizePlatformKey(platformName);
   const basePlatform = PLATFORMS[platformKey] || {
     id: platformKey || `source-${source.source_id}`,
-    name: source.name || 'Streaming Service',
-    color: colorFromName(source.name || String(source.source_id)),
-    icon: (source.name || 'S').slice(0, 1).toUpperCase(),
+    name: platformName,
+    color: colorFromName(platformName || String(source.source_id)),
+    icon: (platformName || 'S').slice(0, 1).toUpperCase(),
     url: source.web_url || 'https://www.google.com',
   };
 
   return {
     ...basePlatform,
     id: `${basePlatform.id}-${source.source_id}`,
-    name: source.name || basePlatform.name,
+    name: platformName,
     url: source.web_url || basePlatform.url,
+    logoUrl: metadata.logo_100px || null,
     price: source.price,
     format: source.format,
   };
@@ -200,7 +238,7 @@ const pushUniquePlatform = (items, platform) => {
   }
 };
 
-const parseWatchmodeSources = (sources) => {
+const parseWatchmodeSources = (sources, sourceMetadata) => {
   const result = {
     subscription: [],
     free: [],
@@ -211,7 +249,7 @@ const parseWatchmodeSources = (sources) => {
   if (!Array.isArray(sources)) return result;
 
   sources.forEach(source => {
-    const platform = getPlatformObject(source);
+    const platform = getPlatformObject(source, sourceMetadata);
     const type = source.type;
 
     if (type === 'sub' || type === 'tve') {
@@ -244,13 +282,17 @@ export const getStreamingAvailability = async (mediaType, id, countryCode = 'US'
   const url = `${WATCHMODE_BASE_URL}/title/${titleId}/sources/?apiKey=${API_KEY}&regions=${region}`;
 
   try {
-    const response = await fetch(url);
+    const [sourceMetadata, response] = await Promise.all([
+      fetchSourceMetadata(region),
+      fetch(url),
+    ]);
+
     if (!response.ok) {
       throw new Error(`Watchmode API error: ${response.status}`);
     }
 
     const data = await response.json();
-    const parsed = parseWatchmodeSources(data);
+    const parsed = parseWatchmodeSources(data, sourceMetadata);
     streamingCache.set(cacheKey, parsed);
     return parsed;
   } catch (error) {

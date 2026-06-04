@@ -108,8 +108,10 @@ export default function MovieCard({ movie, width = '100%' }) {
                 key={p.id}
                 className="platform-dot tooltip"
                 data-tooltip={p.name}
-                style={{ backgroundColor: p.color }}
-              />
+                style={{ backgroundColor: p.logoUrl ? 'rgba(255,255,255,0.92)' : p.color }}
+              >
+                {p.logoUrl && <img src={p.logoUrl} alt="" loading="lazy" />}
+              </div>
             ))}
           </div>
         )}

@@ -42,7 +42,11 @@ export default function StreamingPlatforms({ availability }) {
                   borderRadius: 'var(--radius-sm)',
                 }}
               >
-                {platform.icon}
+                {platform.logoUrl ? (
+                  <img src={platform.logoUrl} alt="" loading="lazy" />
+                ) : (
+                  platform.icon
+                )}
               </div>
               <div className="streaming-item-info">
                 <div className="streaming-item-name">{platform.name}</div>
