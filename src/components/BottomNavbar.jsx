@@ -1,9 +1,8 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Home, Search, Plus, Crown, User } from 'lucide-react';
+import { NavLink } from 'react-router-dom';
+import { Bookmark, Home, Search, User } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 
 export default function BottomNavbar() {
-  const navigate = useNavigate();
   const { watchlist } = useApp();
 
   return (
@@ -19,25 +18,9 @@ export default function BottomNavbar() {
           <span>Search</span>
         </NavLink>
 
-        <div className="bottom-nav-center">
-          <button 
-            className="bottom-nav-center-btn" 
-            onClick={() => navigate('/browse')}
-            title="Browse Categories"
-            aria-label="Browse"
-          >
-            <Plus size={28} />
-          </button>
-        </div>
-
-        <NavLink to="/premium" className={({ isActive }) => `bottom-nav-btn ${isActive ? 'active' : ''}`}>
-          <Crown size={22} />
-          <span>Pro</span>
-        </NavLink>
-
         <NavLink to="/watchlist" className={({ isActive }) => `bottom-nav-btn ${isActive ? 'active' : ''}`}>
           <div style={{ position: 'relative' }}>
-            <User size={22} />
+            <Bookmark size={22} />
             {watchlist.count > 0 && (
               <span style={{
                 position: 'absolute',
@@ -59,7 +42,12 @@ export default function BottomNavbar() {
               </span>
             )}
           </div>
-          <span>My Box</span>
+          <span>Bookmark</span>
+        </NavLink>
+
+        <NavLink to="/auth" className={({ isActive }) => `bottom-nav-btn ${isActive ? 'active' : ''}`}>
+          <User size={22} />
+          <span>Profile</span>
         </NavLink>
       </div>
     </div>

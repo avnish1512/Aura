@@ -1,13 +1,128 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Play, Plus, Star, TrendingUp, Sparkles, Film } from 'lucide-react';
+import { Info, Play, Plus } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { getTrending, getPopular, getTopRated, getNowPlaying, getLatestReleases, getPosterGradient, GENRES } from '../api/tmdb';
+import {
+  getTrending,
+  getPopular,
+  getTopRated,
+  getNowPlaying,
+  getLatestReleases,
+  getUpcoming,
+  getPosterGradient,
+  getBackdropUrl,
+  getImageUrl,
+  GENRES,
+} from '../api/tmdb';
 import { useApp } from '../context/AppContext';
-import Carousel from '../components/Carousel';
-import GenreChips from '../components/GenreChips';
-import { SkeletonCarousel } from '../components/SkeletonLoader';
 import MovieScrollView from '../components/MovieScrollView';
+
+const getTitle = (movie) => movie?.title || movie?.name || 'Aura Pick';
+
+const getDate = (movie) => movie?.release_date || movie?.first_air_date || '';
+
+const getDetailsPath = (movie) => `/details/${movie?.media_type || 'movie'}/${movie?.id}`;
+
+function getLandscapeImage(movie, size = 'w1280') {
+  if (!movie) return null;
+  if (movie.backdrop_path) return getBackdropUrl(movie.backdrop_path, size);
+  return getImageUrl(movie.poster_path, size === 'original' ? 'w1280' : 'w780');
+}
+
+function getGenreNames(movie) {
+  return (movie?.genre_ids || [])
+    .slice(0, 3)
+    .map((id) => GENRES.find((genre) => genre.id === id)?.name)
+    .filter(Boolean);
+}
+
+function uniqueMovies(items) {
+  const seen = new Set();
+  return items.filter((item) => {
+    if (!item?.id || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
+}
+
+function rowFallback(preferred, pool, start = 0) {
+  if (preferred.length > 0) return preferred;
+  if (pool.length === 0) return [];
+
+  const count = Math.min(18, pool.length);
+  return Array.from({ length: count }, (_, index) => pool[(start + index) % pool.length]);
+}
+
+function WebflixCard({ movie, index, onOpen }) {
+  const image = getLandscapeImage(movie, 'w780');
+  const title = getTitle(movie);
+  const year = getDate(movie).slice(0, 4);
+
+  return (
+    <motion.button
+      type="button"
+      className="webflix-card"
+      onClick={() => onOpen(movie)}
+      title={title}
+      style={!image ? { background: getPosterGradient(movie.id || index) } : undefined}
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.32, delay: Math.min(index * 0.025, 0.16) }}
+    >
+      {image && <img src={image} alt={title} loading="lazy" />}
+      <span className="webflix-card-vignette" />
+      <span className="webflix-card-copy">
+        <strong>{title}</strong>
+        {year && <small>{year}</small>}
+      </span>
+    </motion.button>
+  );
+}
+
+function WebflixRow({ title, items, priority = false, onOpen }) {
+  return (
+    <section className={`webflix-row ${priority ? 'priority' : ''}`}>
+      <div className="webflix-row-head">
+        <h2>{title}</h2>
+        <div className="webflix-row-lines" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+          <span />
+        </div>
+      </div>
+      <div className="webflix-row-track">
+        {items.map((movie, index) => (
+          <WebflixCard
+            key={`${title}-${movie.id}-${index}`}
+            movie={movie}
+            index={index}
+            onOpen={onOpen}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function WebflixSkeleton() {
+  return (
+    <div className="webflix-skeleton-wrap">
+      {[0, 1, 2].map((row) => (
+        <section className="webflix-row" key={row}>
+          <div className="webflix-row-head">
+            <span className="webflix-skeleton-title" />
+          </div>
+          <div className="webflix-row-track">
+            {[0, 1, 2, 3, 4, 5].map((item) => (
+              <span className="webflix-skeleton-card" key={item} />
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
 
 export default function Home() {
   const [trending, setTrending] = useState([]);
@@ -15,6 +130,7 @@ export default function Home() {
   const [topRated, setTopRated] = useState([]);
   const [nowPlaying, setNowPlaying] = useState([]);
   const [latestReleases, setLatestReleases] = useState([]);
+  const [upcoming, setUpcoming] = useState([]);
   const [loading, setLoading] = useState(true);
   const [heroMovie, setHeroMovie] = useState(null);
   const navigate = useNavigate();
@@ -23,20 +139,30 @@ export default function Home() {
   useEffect(() => {
     async function fetchData() {
       try {
-        const [latestData, trendData, popData, topData, nowData] = await Promise.all([
+        const [latestData, trendData, popData, topData, nowData, upcomingData] = await Promise.all([
           getLatestReleases(),
           getTrending(),
           getPopular(),
           getTopRated(),
           getNowPlaying(),
+          getUpcoming(),
         ]);
-        setLatestReleases((latestData.results || []).slice(0, 15));
-        setTrending((trendData.results || []).slice(0, 15));
-        setPopular((popData.results || []).slice(0, 15));
-        setTopRated((topData.results || []).slice(0, 15));
-        setNowPlaying((nowData.results || []).slice(0, 15));
 
-        const hero = (latestData.results || trendData.results || [])[0];
+        const latestItems = (latestData.results || []).slice(0, 18);
+        const trendingItems = (trendData.results || []).slice(0, 18);
+        const popularItems = (popData.results || []).slice(0, 18);
+        const topItems = (topData.results || []).slice(0, 18);
+        const nowItems = (nowData.results || []).slice(0, 18);
+        const upcomingItems = (upcomingData.results || []).slice(0, 18);
+
+        setLatestReleases(latestItems);
+        setTrending(trendingItems);
+        setPopular(popularItems);
+        setTopRated(topItems);
+        setNowPlaying(nowItems);
+        setUpcoming(upcomingItems);
+
+        const hero = latestItems.find((item) => item.backdrop_path) || trendingItems[0] || latestItems[0];
         if (hero) setHeroMovie(hero);
       } catch (err) {
         console.error('Failed to fetch home data:', err);
@@ -47,13 +173,42 @@ export default function Home() {
     fetchData();
   }, []);
 
+  const openDetails = (movie) => {
+    if (!movie?.id) return;
+    navigate(getDetailsPath(movie));
+  };
+
   const handleWatchlistAdd = () => {
     if (heroMovie) watchlist.toggleWatchlist(heroMovie);
   };
 
+  const savedItems = watchlist.watchlist || [];
+  const allItems = uniqueMovies([
+    ...latestReleases,
+    ...trending,
+    ...popular,
+    ...nowPlaying,
+    ...topRated,
+    ...upcoming,
+  ]);
+  const heroTitle = getTitle(heroMovie);
+  const heroBackdrop = getLandscapeImage(heroMovie, 'original');
+  const heroGenres = getGenreNames(heroMovie);
+  const heroYear = getDate(heroMovie).slice(0, 4);
+  const heroRating = heroMovie?.vote_average ? heroMovie.vote_average.toFixed(1) : null;
+
+  const rows = [
+    { title: 'Your Next Watch', items: rowFallback(latestReleases, allItems, 0) },
+    { title: 'My List', items: savedItems.length ? savedItems : rowFallback(topRated.slice(0, 8), allItems, 3) },
+    { title: 'Top Searches', items: rowFallback(trending, allItems, 6) },
+    { title: 'New & Popular', items: rowFallback(popular, allItems, 9) },
+    { title: 'Now Playing', items: rowFallback(nowPlaying, allItems, 12) },
+    { title: 'Critically Acclaimed', items: rowFallback(topRated, allItems, 15) },
+    { title: 'Coming Soon', items: rowFallback(upcoming, allItems, 2) },
+  ].filter((row) => row.items.length > 0);
+
   return (
-    <div className="page-content">
-      {/* === MOBILE: Vertical Full-Screen Movie Scroll === */}
+    <div className="page-content home-page-content webflix-page">
       {!loading && (
         <MovieScrollView
           trending={trending}
@@ -61,206 +216,90 @@ export default function Home() {
           topRated={topRated}
           nowPlaying={nowPlaying}
           latestReleases={latestReleases}
+          upcoming={upcoming}
         />
       )}
 
-      {/* === DESKTOP: Original Hero + Carousels === */}
-      <div className="home-desktop-content">
-        {/* Hero Section */}
-        <section className="hero">
-          <div className="hero-backdrop">
-            <div style={{
-              width: '100%',
-              height: '100%',
-              background: heroMovie
-                ? getPosterGradient(heroMovie.id)
-                : 'linear-gradient(135deg, #1a1a3e, #0f0f2a)',
-              opacity: 0.6,
-            }} />
+      <div className="home-desktop-content webflix-home">
+        <section className="webflix-hero">
+          <div
+            className="webflix-hero-media"
+            style={!heroBackdrop && heroMovie ? { background: getPosterGradient(heroMovie.id) } : undefined}
+          >
+            {heroBackdrop && <img src={heroBackdrop} alt="" />}
           </div>
-          <div className="container">
-            <motion.div
-              className="hero-content"
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6, ease: 'easeOut' }}
-            >
-              {heroMovie && (
-                <>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-                    <span className="badge" style={{ background: 'rgba(139, 92, 246, 0.2)', color: 'var(--aurora-purple)' }}>
-                      <TrendingUp size={12} /> Latest Release
-                    </span>
-                    <span className="badge" style={{ background: 'rgba(16, 185, 129, 0.15)', color: 'var(--rating-high)' }}>
-                      <Star size={12} fill="currentColor" /> {heroMovie.vote_average?.toFixed(1)}
-                    </span>
-                  </div>
+          <div className="webflix-hero-scrim" />
 
-                  <h1>{heroMovie.title || heroMovie.name}</h1>
-                  <p>{heroMovie.overview?.slice(0, 200)}{heroMovie.overview?.length > 200 ? '...' : ''}</p>
+          <motion.div
+            className="webflix-hero-content"
+            initial={{ opacity: 0, y: 28 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: 'easeOut' }}
+          >
+            <span className="webflix-eyebrow">Aura Feature</span>
+            <h1>{heroMovie ? heroTitle : 'Aura'}</h1>
+            <p>
+              {heroMovie?.overview ||
+                'Movies and shows presented in a cinematic web experience, with fast rows, bold art, and one-tap details.'}
+            </p>
 
-                  <div className="hero-meta">
-                    {heroMovie.genre_ids?.slice(0, 3).map(gid => {
-                      const genre = GENRES.find(g => g.id === gid);
-                      return genre ? (
-                        <span key={gid} className="badge badge-genre">{genre.name}</span>
-                      ) : null;
-                    })}
-                  </div>
+            <div className="webflix-hero-meta">
+              {heroYear && <span>{heroYear}</span>}
+              {heroRating && <span>{heroRating} rating</span>}
+              {heroGenres.map((genre) => (
+                <span key={genre}>{genre}</span>
+              ))}
+            </div>
 
-                  <div className="hero-actions">
-                    <button
-                      className="btn btn-primary btn-lg"
-                      onClick={() => navigate(`/details/${heroMovie.media_type || 'movie'}/${heroMovie.id}`)}
-                    >
-                      <Play size={18} /> View Details
-                    </button>
-                    <button
-                      className="btn btn-secondary btn-lg"
-                      onClick={handleWatchlistAdd}
-                    >
-                      <Plus size={18} />
-                      {watchlist.isInWatchlist(heroMovie.id) ? 'In Watchlist' : 'Add to Watchlist'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </motion.div>
+            <div className="webflix-actions">
+              <button
+                type="button"
+                className="webflix-btn webflix-btn-play"
+                onClick={() => openDetails(heroMovie)}
+                disabled={!heroMovie}
+              >
+                <Play size={28} fill="currentColor" />
+                Play
+              </button>
+              <button
+                type="button"
+                className="webflix-btn webflix-btn-info"
+                onClick={() => openDetails(heroMovie)}
+                disabled={!heroMovie}
+              >
+                <Info size={28} />
+                More Info
+              </button>
+              <button
+                type="button"
+                className={`webflix-plus ${heroMovie && watchlist.isInWatchlist(heroMovie.id) ? 'active' : ''}`}
+                onClick={handleWatchlistAdd}
+                disabled={!heroMovie}
+                aria-label="Add feature to My List"
+              >
+                <Plus size={24} />
+              </button>
+            </div>
+          </motion.div>
+
+          <div className="webflix-rating-panel" aria-label="Suggested maturity rating">
+            <span>TV-PG</span>
           </div>
         </section>
 
-        {/* Quick Genre Access */}
-        <div className="container">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
-          >
-            <div className="section">
-              <div className="section-header">
-                <h2 className="section-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Sparkles size={20} style={{ color: 'var(--aurora-purple)' }} /> Quick Browse
-                </h2>
-              </div>
-              <GenreChips
-                selected={[]}
-                onSelect={(ids) => {
-                  if (ids.length > 0) {
-                    navigate(`/browse?genre=${ids[ids.length - 1]}`);
-                  }
-                }}
-              />
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Content Carousels */}
-        <div className="container">
+        <div className="webflix-rows">
           {loading ? (
-            <>
-              <SkeletonCarousel />
-              <SkeletonCarousel />
-              <SkeletonCarousel />
-            </>
+            <WebflixSkeleton />
           ) : (
-            <>
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.3, duration: 0.5 }}
-              >
-                <Carousel
-                  title="Latest Releases"
-                  items={latestReleases}
-                  seeAllLink="/browse"
-                />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.4, duration: 0.5 }}
-              >
-                <Carousel
-                  title={`🔥 Trending This Week`}
-                  items={trending}
-                  seeAllLink="/browse"
-                />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.5, duration: 0.5 }}
-              >
-                <Carousel
-                  title="⭐ Top Rated"
-                  items={topRated}
-                  seeAllLink="/browse"
-                />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.6, duration: 0.5 }}
-              >
-                <Carousel
-                  title="🎬 Popular Movies"
-                  items={popular}
-                  seeAllLink="/browse"
-                />
-              </motion.div>
-
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 0.7, duration: 0.5 }}
-              >
-                <Carousel
-                  title="🍿 Now Playing"
-                  items={nowPlaying}
-                  seeAllLink="/browse"
-                />
-              </motion.div>
-
-              {/* Ad zone placeholder for monetization */}
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.8 }}
-                style={{
-                  padding: 'var(--space-xl)',
-                  borderRadius: 'var(--radius-lg)',
-                  background: 'var(--gradient-card)',
-                  border: '1px solid var(--border-subtle)',
-                  textAlign: 'center',
-                  marginBottom: 'var(--space-2xl)',
-                }}
-              >
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 'var(--space-md)',
-                  flexWrap: 'wrap',
-                }}>
-                  <Film size={24} style={{ color: 'var(--aurora-purple)' }} />
-                  <div>
-                    <h3 style={{ fontSize: '1.1rem', marginBottom: '4px' }}>
-                      Never miss where to watch
-                    </h3>
-                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                      Upgrade to <strong style={{ color: 'var(--aurora-purple)' }}>Aura Pro</strong> for
-                      personalized alerts when your favorite titles change platforms.
-                    </p>
-                  </div>
-                  <button className="btn btn-primary" onClick={() => navigate('/premium')}>
-                    Learn More
-                  </button>
-                </div>
-              </motion.div>
-            </>
+            rows.map((row, index) => (
+              <WebflixRow
+                key={row.title}
+                title={row.title}
+                items={row.items}
+                priority={index === 0}
+                onOpen={openDetails}
+              />
+            ))
           )}
         </div>
       </div>

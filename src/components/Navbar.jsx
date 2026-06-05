@@ -1,13 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
-import { Search, Home, Compass, Bookmark, Crown, Menu, X, User, LogOut } from 'lucide-react';
+import { Search, Home, Compass, Bookmark, Crown, Menu, X, User, LogOut, Bell, ChevronDown, Smile } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { searchMulti, getImageUrl } from '../api/tmdb';
+import { useDebounce } from '../hooks/useDebounce';
 import CountrySelector from './CountrySelector';
+
+const getResultTitle = (item) => item?.title || item?.name || 'Untitled';
+
+const getResultYear = (item) =>
+  (item?.release_date || item?.first_air_date || '').slice(0, 4);
+
+function SearchSuggestions({ query, results, loading, onPick }) {
+  const trimmedQuery = query.trim();
+  if (!trimmedQuery) return null;
+
+  return (
+    <div className="navbar-search-dropdown" role="listbox" aria-label="Search suggestions">
+      {trimmedQuery.length < 2 ? (
+        <div className="navbar-search-status">Keep typing to search titles</div>
+      ) : loading ? (
+        <div className="navbar-search-status">Searching...</div>
+      ) : results.length > 0 ? (
+        results.map((item) => {
+          const title = getResultTitle(item);
+          const year = getResultYear(item);
+          const image = getImageUrl(item.poster_path, 'w92') || getImageUrl(item.backdrop_path, 'w154');
+
+          return (
+            <button
+              type="button"
+              className="navbar-search-result"
+              key={`${item.media_type || 'movie'}-${item.id}`}
+              onClick={() => onPick(item)}
+              role="option"
+            >
+              <span className="navbar-search-thumb">
+                {image ? <img src={image} alt="" loading="lazy" /> : <span>{title.charAt(0)}</span>}
+              </span>
+              <span className="navbar-search-copy">
+                <strong>{title}</strong>
+                <small>
+                  {item.media_type === 'tv' ? 'Series' : 'Movie'}
+                  {year ? ` · ${year}` : ''}
+                </small>
+              </span>
+            </button>
+          );
+        })
+      ) : (
+        <div className="navbar-search-status">No titles found</div>
+      )}
+    </div>
+  );
+}
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
+  const mobileSearchRef = useRef(null);
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
   const navigate = useNavigate();
   const { auth, watchlist } = useApp();
 
@@ -17,11 +74,81 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  const handleSearch = (e) => {
+  useEffect(() => {
+    const query = debouncedSearchQuery.trim();
+    if (query.length < 2) {
+      return undefined;
+    }
+
+    let active = true;
+    async function fetchSuggestions() {
+      setSearchLoading(true);
+      try {
+        const data = await searchMulti(query);
+        if (!active) return;
+        const titles = (data.results || [])
+          .filter((item) => item.media_type !== 'person')
+          .slice(0, 7);
+        setSearchResults(titles);
+      } catch (err) {
+        console.error('Navbar search failed:', err);
+        if (active) setSearchResults([]);
+      } finally {
+        if (active) setSearchLoading(false);
+      }
+    }
+
+    fetchSuggestions();
+    return () => {
+      active = false;
+    };
+  }, [debouncedSearchQuery]);
+
+  useEffect(() => {
+    const handleClick = (event) => {
+      const target = event.target;
+      const inDesktopSearch = searchRef.current?.contains(target);
+      const inMobileSearch = mobileSearchRef.current?.contains(target);
+      if (!inDesktopSearch && !inMobileSearch) {
+        setSearchOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
+
+  const clearSearch = () => {
+    setSearchQuery('');
+    setSearchResults([]);
+    setSearchOpen(false);
+    setSearchLoading(false);
+  };
+
+  const openSearchResult = (item, closeMenu = false) => {
+    if (!item?.id) return;
+    navigate(`/details/${item.media_type || 'movie'}/${item.id}`);
+    clearSearch();
+    if (closeMenu) setMobileOpen(false);
+  };
+
+  const handleSearchChange = (value) => {
+    setSearchQuery(value);
+    setSearchOpen(Boolean(value.trim()));
+    if (value.trim().length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+    }
+  };
+
+  const handleSearch = (e, closeMenu = false) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate(`/search?q=${encodeURIComponent(searchQuery.trim())}`);
-      setSearchQuery('');
+    if (!searchQuery.trim()) return;
+
+    if (searchResults.length > 0) {
+      openSearchResult(searchResults[0], closeMenu);
+    } else {
+      setSearchOpen(true);
     }
   };
 
@@ -46,26 +173,24 @@ export default function Navbar() {
             Aura
           </Link>
 
-          <form className="navbar-search" onSubmit={handleSearch}>
-            <Search className="navbar-search-icon" />
-            <input
-              type="text"
-              placeholder="Search movies, TV shows..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              id="navbar-search-input"
-            />
-          </form>
-
           <div className="navbar-links">
             <NavLink to="/" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`} end>
-              <Home size={18} /> Home
+              Home
             </NavLink>
-            <NavLink to="/browse" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
-              <Compass size={18} /> Browse
+            <NavLink to="/browse?media=tv" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
+              Shows
+            </NavLink>
+            <NavLink to="/browse?media=movie" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
+              Movies
+            </NavLink>
+            <NavLink to="/browse?category=games" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
+              Games
+            </NavLink>
+            <NavLink to="/browse?sort=popular" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
+              New & Popular
             </NavLink>
             <NavLink to="/watchlist" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
-              <Bookmark size={18} /> Watchlist
+              My List
               {watchlist.count > 0 && (
                 <span style={{
                   background: 'var(--gradient-primary)',
@@ -80,36 +205,56 @@ export default function Navbar() {
                 </span>
               )}
             </NavLink>
-            <NavLink to="/premium" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
-              <Crown size={18} /> Pro
+            <NavLink to="/browse" className={({ isActive }) => `navbar-link ${isActive ? 'active' : ''}`}>
+              Browse by Languages
             </NavLink>
           </div>
 
+          <form className="navbar-search" onSubmit={handleSearch} ref={searchRef}>
+            <Search className="navbar-search-icon" />
+            <input
+              type="text"
+              placeholder="Titles, people, genres"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setSearchOpen(Boolean(searchQuery.trim()))}
+              id="navbar-search-input"
+              autoComplete="off"
+            />
+            {searchOpen && (
+              <SearchSuggestions
+                query={searchQuery}
+                results={searchResults}
+                loading={searchLoading}
+                onPick={(item) => openSearchResult(item)}
+              />
+            )}
+          </form>
+
           <div className="navbar-actions">
+            <Link to="/browse?genre=10751" className="navbar-web-action navbar-kids-link">
+              Kids
+            </Link>
+            <button type="button" className="navbar-web-action navbar-bell-btn" aria-label="Notifications">
+              <Bell size={24} />
+            </button>
             <CountrySelector />
             {auth.isAuthenticated ? (
               <div style={{ position: 'relative' }}>
                 <button
-                  className="btn-icon btn-secondary"
+                  className="btn-icon btn-secondary navbar-profile-chip"
                   onClick={auth.logout}
                   title="Log out"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 'var(--radius-full)',
-                    background: 'var(--gradient-primary)',
-                    color: 'white',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    border: 'none',
-                  }}
                 >
                   {auth.user.name?.[0]?.toUpperCase() || 'U'}
+                  <ChevronDown className="navbar-profile-arrow" size={16} />
                 </button>
               </div>
             ) : (
-              <Link to="/auth" className="btn btn-primary btn-sm">
-                Sign In
+              <Link to="/auth" className="btn btn-primary btn-sm navbar-profile-chip" aria-label="Profile">
+                <span className="navbar-signin-text">Sign In</span>
+                <Smile className="navbar-profile-smile" size={23} />
+                <ChevronDown className="navbar-profile-arrow" size={16} />
               </Link>
             )}
             <button
@@ -130,14 +275,24 @@ export default function Navbar() {
           <X size={22} />
         </button>
 
-        <div className="mobile-search">
-          <form onSubmit={(e) => { handleSearch(e); closeMobile(); }}>
+        <div className="mobile-search" ref={mobileSearchRef}>
+          <form onSubmit={(e) => handleSearch(e, true)}>
             <input
               type="text"
-              placeholder="Search movies, TV shows..."
+              placeholder="Titles, people, genres"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              onFocus={() => setSearchOpen(Boolean(searchQuery.trim()))}
+              autoComplete="off"
             />
+            {searchOpen && (
+              <SearchSuggestions
+                query={searchQuery}
+                results={searchResults}
+                loading={searchLoading}
+                onPick={(item) => openSearchResult(item, true)}
+              />
+            )}
           </form>
         </div>
 

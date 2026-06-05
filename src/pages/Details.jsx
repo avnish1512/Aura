@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Heart, Play, Star, Clock, Calendar, Film, Tv } from 'lucide-react';
+import { ArrowLeft, Heart, Play, Star, Clock, Calendar, Film, Tv } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { getDetails, getPosterGradient, getImageUrl, GENRES } from '../api/tmdb';
 import { getStreamingAvailability } from '../api/streaming';
@@ -75,9 +75,14 @@ export default function Details() {
   const genres = details.genres || details.genre_ids?.map(gid => GENRES.find(g => g.id === gid)).filter(Boolean) || [];
   const isTV = type === 'tv';
   const isWatchlisted = watchlist.isInWatchlist(details.id);
+  const mediaImageUrl = details.backdrop_path
+    ? getImageUrl(details.backdrop_path, 'w780')
+    : details.poster_path && details.poster_path !== '/mock'
+      ? getImageUrl(details.poster_path, 'w780')
+      : null;
 
   return (
-    <div className="page-content">
+    <div className="page-content details-page-content">
       {/* Backdrop */}
       <div className="details-backdrop">
         <div style={{
@@ -90,12 +95,50 @@ export default function Details() {
 
       {/* Main Content */}
       <div className="details-main container">
+        <div className="details-mobile-top">
+          <button className="details-mobile-back" onClick={() => navigate(-1)} type="button">
+            <ArrowLeft size={14} />
+            <span>Back</span>
+          </button>
+          <div className="details-mobile-chips">
+            {genres[0] && <span>{genres[0].name}</span>}
+            {details.runtime && <span>{Math.floor(details.runtime / 60)}h {details.runtime % 60}m</span>}
+            {rating && (
+              <span>
+                <Star size={11} fill="currentColor" />
+                {rating}/10
+              </span>
+            )}
+          </div>
+        </div>
+
         <motion.div
           className="details-header"
           initial={{ opacity: 0, y: 30 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
         >
+          <div className="details-mobile-media">
+            {mediaImageUrl ? (
+              <img src={mediaImageUrl} alt={title} />
+            ) : (
+              <div className="details-mobile-media-fallback" style={{ background: getPosterGradient(details.id) }}>
+                {title}
+              </div>
+            )}
+            <button
+              className="details-trailer-btn"
+              onClick={() => {
+                const element = document.getElementById('streaming-availability');
+                if (element) element.scrollIntoView({ behavior: 'smooth' });
+              }}
+              type="button"
+            >
+              <Play size={14} fill="currentColor" />
+              Watch Trailer
+            </button>
+          </div>
+
           {/* Poster */}
           <div className="details-poster">
             {details.poster_path === '/mock' || !details.poster_path ? (
@@ -193,7 +236,10 @@ export default function Details() {
             )}
 
             {details.overview && (
-              <p className="details-overview">{details.overview}</p>
+              <>
+                <p className="details-overview">{details.overview}</p>
+                <button className="details-read-more" type="button">Read More</button>
+              </>
             )}
 
             <div className="details-actions" style={{ display: 'flex', gap: 'var(--space-sm)', flexWrap: 'wrap' }}>

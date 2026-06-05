@@ -39,14 +39,30 @@ function AnimatedRoutes() {
   );
 }
 
+function AppShell() {
+  const location = useLocation();
+  const showBottomNavbar = location.pathname !== '/';
+  const shellClass = [
+    'app-shell',
+    location.pathname === '/' ? 'home-route' : '',
+    location.pathname.startsWith('/details/') ? 'details-route' : '',
+  ].filter(Boolean).join(' ');
+
+  return (
+    <div className={shellClass}>
+      <Navbar />
+      <AnimatedRoutes />
+      {showBottomNavbar && <BottomNavbar />}
+      <Footer />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <BrowserRouter>
       <AppProvider>
-        <Navbar />
-        <AnimatedRoutes />
-        <BottomNavbar />
-        <Footer />
+        <AppShell />
       </AppProvider>
     </BrowserRouter>
   );
